@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Any
 from api import get
 from dotenv import load_dotenv 
+from paneldisplay import render_game_to_image
 
 
 load_dotenv()
@@ -179,6 +180,8 @@ def process_scores() -> None:
                 "away_record": away_record,
                 "home_record": home_record,
             }
+
+            render_game_to_image(game_data)
 
             print_game_status(game_data)
 
