@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from api import get
 from dotenv import load_dotenv 
 from paneldisplay import render_game_to_image
-
+from odds import odds_by_game  # <-- import odds module
 
 load_dotenv()
 
@@ -16,28 +16,11 @@ logger = logging.getLogger(__name__)
 def validate_game_data(data: Any) -> bool:
     return isinstance(data, dict) and 'away' in data and 'home' in data
 
-def extract_odds_line(game_odds: Optional[Dict[str, Any]], key: str, label: str, preferred_book: Optional[str] = None) -> str:
-    if not game_odds or not isinstance(game_odds, dict):
-        return f"{label}: N/A"
-    for book in game_odds.get("sportsBooks", []):
-        if not isinstance(book, dict):
-            continue
-        if preferred_book and book.get("sportsBook") != preferred_book:
-            continue
-        val = book.get("odds", {}).get(key)
-        if val is not None:
-            return f"{label}: {val}"
-    return f"{label}: N/A"
-
-extract_ou_line = lambda odds, pb=None: extract_odds_line(odds, "totalOver", "O/U", pb)
-extract_ml_line = lambda odds, pb=None: extract_odds_line(odds, "homeTeamMLOdds", "ML", pb)
-
 def get_api_data(endpoint: str, params: dict, expected_type: type, default):
     try:
         resp = get(endpoint, params)
         body = resp.get("body", default)
         if not isinstance(body, expected_type):
-            """logger.warning(f"Unexpected {endpoint} response body format")"""
             return default
         return body
     except Exception as e:
@@ -49,11 +32,6 @@ def get_live_scores(date: Optional[str] = None) -> Dict[str, Any]:
         date = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y%m%d")
     return get_api_data("getNFLScoresOnly", {"gameDate": date, "topPerformers": "true"}, dict, {})
 
-def get_betting_odds(date: Optional[str] = None) -> list:
-    if not date:
-        date = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y%m%d")
-    return get_api_data("getNFLBettingOdds", {"gameDate": date, "playerProps": "true", "itemFormat": "list"}, list, [])
-
 def get_team_data(date: Optional[str] = None) -> list:
     if not date:
         date = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y%m%d")
@@ -61,11 +39,14 @@ def get_team_data(date: Optional[str] = None) -> list:
 
 def get_game_venue(game_id: str) -> dict:
     return get_api_data("getNFLGameInfo", {"gameID": game_id}, dict, {"venue":"N/A", "away":"???", "home":"???", "gameTime":""})
-    
-
 
 def get_box_score(game_id: str) -> dict:
-    return get_api_data("getNFLBoxScore", {"gameID": game_id, "playerStatsFormat": "list", "startingLineups": "true", "fantasyPoints": "true"}, dict, {})
+    return get_api_data("getNFLBoxScore", {
+        "gameID": game_id,
+        "playerStatsFormat": "list",
+        "startingLineups": "true",
+        "fantasyPoints": "true"
+    }, dict, {})
 
 def get_team_record(team_abv: str, team_data: list) -> str:
     for team in team_data:
@@ -84,17 +65,17 @@ def print_game_status(game: Dict[str, Any]) -> None:
     ou = game.get("ou_string", "O/U: N/A")
     ml = game.get("ml_string", "ML: N/A")
     sched = game.get("scheduled_time", "Unknown")
-    venue = game.get("venue", "N/A")  # <- pull venue
+    venue = game.get("venue", "N/A")
 
     ingame = any(k in status.lower() for k in ["halftime", "timeout", "period", "final", "completed", "win!"])
 
     if not ingame:
         print(f"Pre-Season: {away} ({ar}) @ {home} ({hr})")
-        print(f"Venue: {venue}")  # <- show it
+        print(f"Venue: {venue}")
         print(f"Start Time: {sched} | {ou} | {ml}")
     else:
         print(f"Live {away} {ascore} @ {home} {hscore}")
-        print(f"Venue: {venue}")  # <- show it
+        print(f"Venue: {venue}")
         print(f"Status: {status} | {ou} | {ml}")
 
 def find_next_game_date(start_date: datetime, max_days=7):
@@ -119,8 +100,8 @@ def process_scores() -> None:
             return
         logger.info(f"Next games found on {date_str}")
 
-    odds_list = get_betting_odds(date_str)
-    odds_by_game = {item["gameID"]: item for item in odds_list if isinstance(item, dict) and "gameID" in item}
+    # 🔹 Fetch odds once for all games
+    odds_data = odds_by_game(date_str)
     team_data_cache = get_team_data(date_str)
 
     logger.info(f"\nNFL Games for {datetime.strptime(date_str, '%Y%m%d').strftime('%Y-%m-%d')}:\n")
@@ -163,9 +144,10 @@ def process_scores() -> None:
             else:
                 display_status = status
 
-            game_odds = odds_by_game.get(game_id, {})
-            ou_string = extract_ou_line(game_odds)
-            ml_string = extract_ml_line(game_odds)
+            # 🔹 Pull odds from odds_data
+            game_odds = odds_data.get(game_id, {"ML": "ML: N/A", "O/U": "O/U: N/A"})
+            ou_string = game_odds["O/U"]
+            ml_string = game_odds["ML"]
 
             game_data = {
                 "venue": venue,
@@ -182,7 +164,6 @@ def process_scores() -> None:
             }
 
             render_game_to_image(game_data)
-
             print_game_status(game_data)
 
         except Exception as e:
