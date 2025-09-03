@@ -53,7 +53,7 @@ def render_game_to_image(game):
 
     # Draw records underneath logos
     draw.text((2, 32), away_record, font=font, fill="white")
-    draw.text((WIDTH - 40,32), home_record, font=font, fill="white")
+    draw.text((WIDTH - 23,32), home_record, font=font, fill="white")
 
     # Display scores next to each team's logo
     if any(keyword in display_status.lower() for keyword in ["in progress", "bot", "top", "mid", "final", "win", "postponed", "delayed"]):
