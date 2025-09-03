@@ -25,7 +25,7 @@ mqtt_connection.connect().result()
 print("✅ Connected!")
 
 # Publish a test message
-message = {"msg": "Hello from EC2 via .env!"}
+message = {"msg": "Successful try!!"}
 mqtt_connection.publish(
     topic=TOPIC,
     payload=json.dumps(message),
