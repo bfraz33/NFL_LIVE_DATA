@@ -5,6 +5,7 @@ from cache import load_from_cache
 # Load logo cache if needed (currently unused but left in case you re-enable)
 logo_cache = load_from_cache("logo_cache.json")
 
+
 def load_team_logo(team_abbr, logos_dir="logos"):
     # Construct expected PNG path
     png_path = os.path.join(logos_dir, f"{team_abbr.upper()}.png")
@@ -52,7 +53,7 @@ def render_game_to_image(game):
 
     # Draw records underneath logos
     draw.text((2, 32), away_record, font=font, fill="white")
-    draw.text((WIDTH - 70, 32), home_record, font=font, fill="white")
+    draw.text((WIDTH - 40,32), home_record, font=font, fill="white")
 
     # Display scores next to each team's logo
     if any(keyword in display_status.lower() for keyword in ["in progress", "bot", "top", "mid", "final", "win", "postponed", "delayed"]):
