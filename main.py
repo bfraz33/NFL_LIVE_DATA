@@ -16,20 +16,34 @@ def should_poll(now=None):
     return 8 <= now.hour < 24
 
 
+def run_once():
+    """
+    Run the livescores + any other scripts ONCE and return the results.
+    This is what publisher.py will call.
+    """
+    now = datetime.now(ZoneInfo("America/Chicago"))
+    data = {
+        "timestamp": now.isoformat(),
+        "within_polling_hours": should_poll(now),
+        "scores": None,
+    }
+
+    if should_poll(now):
+        logger.info("Polling API (single run)...")
+        data["scores"] = process_scores()
+    else:
+        logger.info("Outside polling hours. Skipping API call.")
+
+    return data
+
+
 def main_loop():
     """Main polling loop to run livescores process periodically."""
     while True:
-        now = datetime.now(ZoneInfo("America/Chicago"))
-        if should_poll(now):
-            logger.info("Polling API...")
-            process_scores()
-        else:
-            logger.info("Outside polling hours. Skipping API call.")
-
+        run_once()
         logger.info(f"Waiting {POLL_INTERVAL // 60} minutes before next poll...\n")
         time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
     main_loop()
-    
