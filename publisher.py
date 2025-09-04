@@ -4,12 +4,11 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
-from awscrt import io, mqtt
+from awscrt import io, mqtt, auth
 from awsiot import mqtt_connection_builder
-from awsiot import auth  # Correct credentials provider
 
-# Import your existing functions
-from main import run_once  # Should return dict with 'scores' and 'odds'
+# Import your existing logic
+from main import run_once  # run_once() should return dict with 'scores' and 'odds'
 
 # Load environment variables
 load_dotenv()
@@ -17,14 +16,14 @@ ENDPOINT = os.getenv("ENDPOINT")
 CLIENT_ID = os.getenv("CLIENT_ID", "nfl-publisher-ec2")
 TOPIC = os.getenv("TOPIC", "nfl/live/scores")
 REGION = os.getenv("REGION", "us-east-2")
-POLL_INTERVAL = 180  # seconds (3 minutes)
+POLL_INTERVAL = 180  # 3 minutes
 
-# Event loop and bootstrap
+# Set up AWS CRT event loop
 event_loop_group = io.EventLoopGroup(1)
 host_resolver = io.DefaultHostResolver(event_loop_group)
 client_bootstrap = io.ClientBootstrap(event_loop_group, host_resolver)
 
-# MQTT connection using WebSockets + IAM role
+# MQTT connection using WebSockets + EC2 IAM role credentials
 mqtt_connection = mqtt_connection_builder.websockets_with_default_aws_signing(
     endpoint=ENDPOINT,
     client_id=CLIENT_ID,
@@ -38,15 +37,15 @@ print(f"Connecting to {ENDPOINT} with client ID {CLIENT_ID}...")
 mqtt_connection.connect().result()
 print("✅ Connected to AWS IoT!")
 
-# Memory cache to detect changes
+# Track last published data
 last_data = None
 
 try:
     while True:
-        # Get latest scores and odds
-        new_data = run_once()  # returns dict with 'scores' and 'odds'
+        # Get latest scores and odds from your main script
+        new_data = run_once()  # Must return dict: {'scores': [...], 'odds': [...]}
 
-        # Only publish if something changed
+        # Publish only if data changed
         if new_data != last_data:
             mqtt_connection.publish(
                 topic=TOPIC,
