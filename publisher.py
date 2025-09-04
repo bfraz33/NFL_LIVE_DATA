@@ -34,7 +34,7 @@ mqtt_connection.connect().result()
 print("✅ Connected!")
 
 # Publish a test message
-message = {"msg": "EC2 publisher connected with IAM role!"}
+message = {"msg": "Well done! You have connected successfully!✅"}
 mqtt_connection.publish(
     topic=TOPIC,
     payload=json.dumps(message),
