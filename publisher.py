@@ -9,7 +9,7 @@ load_dotenv()
 ENDPOINT = os.getenv("ENDPOINT")
 CLIENT_ID = os.getenv("CLIENT_ID")
 TOPIC = os.getenv("TOPIC")
-REGION = os.getenv("REGION", "us-east-2")
+REGION = os.getenv("REGION")
 
 # MQTT connection using WebSockets + IAM auth (for testing without certs)
 mqtt_connection = mqtt_connection_builder.websockets_with_default_aws_signing(
