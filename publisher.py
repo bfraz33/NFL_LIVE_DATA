@@ -2,7 +2,7 @@ import os, json
 from dotenv import load_dotenv
 from awscrt import io, mqtt
 from awsiot import mqtt_connection_builder
-from NFL_LIVE_DATA.test import run_once   # <-- import the new function
+from main import run_once   # <-- import the new function
 
 # Load .env variables
 load_dotenv()
