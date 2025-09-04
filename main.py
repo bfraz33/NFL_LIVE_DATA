@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from livescores import process_scores
 from logger import get_logger
 from cache import save_to_cache, load_from_cache, GAME_CACHE_FILE, LOGO_CACHE_FILE
+from odds import get_betting_odds
 
 logger = get_logger(__name__)
 POLL_INTERVAL = 180  # seconds (3 minutes)
@@ -25,7 +26,8 @@ def run_once():
     data = {
         "timestamp": now.isoformat(),
         "within_polling_hours": should_poll(now),
-        "scores": None,
+        "scores": process_scores(),
+        "odds": get_betting_odds(),
     }
 
     if should_poll(now):
