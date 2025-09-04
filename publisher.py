@@ -28,7 +28,6 @@ mqtt_connection = mqtt_connection_builder.websockets_with_default_aws_signing(
     endpoint=ENDPOINT,
     client_id=CLIENT_ID,
     region=REGION,
-    credentials_provider=io.AwsCredentialsProvider.new_default_chain(client_bootstrap),
     clean_session=False,
     keep_alive_secs=30,
 )
