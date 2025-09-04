@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 from awscrt import io, mqtt
 from awsiot import mqtt_connection_builder
 from main import run_once   # import the new function
+from awscrt.auth import AwsCredentialsProvider
+
 
 # Load .env variables
 load_dotenv()
@@ -22,6 +24,7 @@ mqtt_connection = mqtt_connection_builder.websockets_with_default_aws_signing(
     endpoint=ENDPOINT,
     client_id=CLIENT_ID,
     region=REGION,
+    credentials_provider=AwsCredentialsProvider.new_default_chain(client_bootstrap),
     clean_session=False,
     keep_alive_secs=30,
 )
