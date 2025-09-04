@@ -1,8 +1,8 @@
-from awscrt.auth import aws_signing
-from awsiot import mqtt_connection_builder
-from awscrt import io, mqtt
-import os, json
+import os
+import json
 from dotenv import load_dotenv
+from awscrt import io, mqtt
+from awsiot import mqtt_connection_builder
 
 # Load .env
 load_dotenv()
@@ -12,15 +12,12 @@ CLIENT_ID = os.getenv("CLIENT_ID")
 TOPIC = os.getenv("TOPIC")
 REGION = os.getenv("REGION")
 
-# Create credentials provider (uses EC2 IAM role)
-credentials_provider = aws_signing.AwsCredentialsProvider.new_default_chain()
-
-# Corrected MQTT connection call
+# MQTT connection using WebSockets + IAM auth (EC2 IAM role)
 mqtt_connection = mqtt_connection_builder.websockets_with_default_aws_signing(
     endpoint=ENDPOINT,
     client_id=CLIENT_ID,
     region=REGION,
-    credentials_provider=credentials_provider,  # <--- REQUIRED
+    credentials_provider=None,  # EC2 IAM role will be used
     clean_session=False,
     keep_alive_secs=30,
 )
@@ -40,4 +37,3 @@ print(f"📡 Published test message to {TOPIC}")
 
 mqtt_connection.disconnect().result()
 print("🔌 Disconnected")
-
