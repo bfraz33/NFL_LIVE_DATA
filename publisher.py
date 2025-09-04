@@ -25,7 +25,7 @@ mqtt_connection.connect().result()
 print("✅ Connected!")
 
 # Publish a test message
-message = {"msg": "Successful try!!"}
+message = {"msg": "Successful attempt!"}
 mqtt_connection.publish(
     topic=TOPIC,
     payload=json.dumps(message),
