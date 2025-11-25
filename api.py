@@ -64,4 +64,3 @@ def get(endpoint, params, retries=3, backoff=2):
             return response.json()
 
     raise Exception("Too many retries for API call")
-
