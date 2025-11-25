@@ -1,7 +1,7 @@
 # odds.py
 import logging
 from typing import Optional, Dict, Any
-from api import get # Use relative import if 'api.py' is in the same directory
+from api import get 
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +11,7 @@ def extract_odds_line(
     label: str, 
     preferred_book: Optional[str] = None
 ) -> str:
-    """Extract a specific line from a game's odds dictionary."""
+    # Extracting a specific line from a game's odds dictionary.
     if not game_odds or not isinstance(game_odds, dict):
         return f"{label}: N/A"
     for book in game_odds.get("sportsBooks", []):

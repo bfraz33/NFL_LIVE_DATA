@@ -1,9 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
-from cache import load_from_cache
-
-# Load logo cache if needed (currently unused but left in case you re-enable)
-logo_cache = load_from_cache("logo_cache.json")
 
 
 def load_team_logo(team_abbr, logos_dir="logos"):

@@ -8,7 +8,7 @@ load_dotenv()
 
 
 LAST_CALL = 0
-MIN_INTERVAL = 3   # min between individual API calls
+MIN_INTERVAL = 3   # min between  API calls
 
 LOG_DIR = r"C:/ProjectX/NFL/weekly api call logs"
 os.makedirs(LOG_DIR, exist_ok=True)

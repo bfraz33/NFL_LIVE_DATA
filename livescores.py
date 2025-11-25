@@ -2,7 +2,7 @@ import time
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from api import get
 from dotenv import load_dotenv
@@ -14,14 +14,19 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-
-# CACHES FOR LAST KNOWN STATUS + SCORE
+# -----------------------------------------------------------
+# CACHES FOR LAST KNOWN GOOD STATUS + SCORE
+# -----------------------------------------------------------
 LAST_STATUS_CACHE: Dict[str, str] = {}
 LAST_SCORE_CACHE: Dict[str, tuple[int, int]] = {}
 
+
+# -----------------------------------------------------------
 # API WRAPPERS
+# -----------------------------------------------------------
 
 def get_api_data(endpoint: str, params: dict, expected_type: type, default):
+    """Generic API fetch helper."""
     try:
         resp = get(endpoint, params)
         body = resp.get("body", default)
@@ -32,7 +37,7 @@ def get_api_data(endpoint: str, params: dict, expected_type: type, default):
 
 
 def get_live_scores(date: Optional[str] = None) -> Dict[str, Any]:
-    """ live scoreboard (Tank01: getNFLScoresOnly)."""
+    """Main live scoreboard (Tank01: getNFLScoresOnly)."""
     if not date:
         date = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y%m%d")
     return get_api_data(
@@ -44,7 +49,7 @@ def get_live_scores(date: Optional[str] = None) -> Dict[str, Any]:
 
 
 def get_team_data() -> list:
-    """team records (Tank01: getNFLTeams)."""
+    """Source of correct team records (Tank01: getNFLTeams)."""
     return get_api_data(
         "getNFLTeams",
         {
@@ -61,7 +66,7 @@ def get_team_data() -> list:
 
 
 def get_game_venue(game_id: str) -> dict:
-    """venue + scheduled kickoff (Tank01: getNFLGameInfo)."""
+    """Used for venue + scheduled kickoff (Tank01: getNFLGameInfo)."""
     return get_api_data(
         "getNFLGameInfo",
         {"gameID": game_id},
@@ -69,7 +74,8 @@ def get_game_venue(game_id: str) -> dict:
         {"venue": "N/A", "away": "???", "home": "???", "gameTime": "", "gameTime_epoch": None},
     )
 
-# SAFE SCORE HANDLING
+
+# SAFE SCORE
 
 def safe_score(game_id: str, game_info: Dict[str, Any]) -> tuple[int, int]:
     """
@@ -78,7 +84,6 @@ def safe_score(game_id: str, game_info: Dict[str, Any]) -> tuple[int, int]:
       2) last cached values if API dropped them
       3) 0–0 only if nothing else is known
     """
-
     prev = LAST_SCORE_CACHE.get(game_id)
 
     def parse(val):
@@ -87,7 +92,7 @@ def safe_score(game_id: str, game_info: Dict[str, Any]) -> tuple[int, int]:
         except (TypeError, ValueError):
             return None
 
-    # Tank01 can use different keys; try them in order:
+    # Pulling raw score
     raw_away = (
         game_info.get("awayScore")
         or game_info.get("awayPts")
@@ -98,29 +103,29 @@ def safe_score(game_id: str, game_info: Dict[str, Any]) -> tuple[int, int]:
         or game_info.get("homePts")
         or game_info.get("home_score")
     )
-
+    # Parsing score
     new_away = parse(raw_away)
     new_home = parse(raw_home)
 
-    # Case 1: Tank01 returned actual scores
+    # Scores returned
     if new_away is not None and new_home is not None:
         LAST_SCORE_CACHE[game_id] = (new_away, new_home)
         return new_away, new_home
 
-    # Case 2: API dropped scores but we have previous
+    # Scores drop but we keep the previous score
     if prev:
         return prev
 
-    # Case 3: No previous score (start of game / weird API)
+    # No previous score 0 - 0
     LAST_SCORE_CACHE[game_id] = (0, 0)
     return 0, 0
 
 # SAFE LIVE STATUS HANDLING
 
-
 def safe_live_status(game_id: str, raw_status: str, period: str, clock: str) -> str:
     """
-    Stabilizes live game status.
+    Stabilizes live game status texts so they don't flip back to "Scheduled"
+    when Tank01 temporarily drops fields.
     """
     prev = LAST_STATUS_CACHE.get(game_id)
     s = (raw_status or "").lower().strip()
@@ -151,6 +156,7 @@ def safe_live_status(game_id: str, raw_status: str, period: str, clock: str) -> 
 
 # UTILITIES
 
+
 def validate_game_data(data: Any) -> bool:
     return isinstance(data, dict) and "away" in data and "home" in data
 
@@ -166,47 +172,18 @@ def get_team_record(team_abv: str, team_data: list) -> str:
 
 
 def format_kickoff_ct(game_info: dict, venue_info: dict) -> str:
-    """
-    Convert Tank01 kickoff time (which is effectively Eastern Time)
-    into Central Time and format like '8:15p'.
-    """
-    TARGET_TZ = ZoneInfo("America/Chicago")
-    SOURCE_TZ = ZoneInfo("America/New_York")  # Tank01 times are ET
-
-    # 1) Prefer epoch if we have it
+   # Format kickoff time into Central Time like '8:15p'.
     epoch = venue_info.get("gameTime_epoch") or game_info.get("gameTime_epoch")
     try:
         if epoch:
-            # Interpret epoch as Eastern-local and convert to Central
-            dt_et = datetime.fromtimestamp(int(epoch), tz=SOURCE_TZ)
-            dt_ct = dt_et.astimezone(TARGET_TZ)
+            dt_utc = datetime.fromtimestamp(int(epoch), tz=ZoneInfo("UTC"))
+            dt_ct = dt_utc.astimezone(ZoneInfo("America/Chicago"))
             return dt_ct.strftime("%-I:%M%p").lower().replace("pm", "p").replace("am", "a")
-    except Exception as e:
-        logger.debug(f"Error parsing epoch kickoff time: {e}")
+    except Exception:
+        pass
+    return venue_info.get("gameTime") or game_info.get("gameTime") or "TBD"
 
-    # 2) Fallback: parse string time (assume ET) and convert to CT
-    raw_time = (venue_info.get("gameTime") or game_info.get("gameTime") or "").strip()
-    if raw_time:
-        normalized = raw_time.upper().replace(" ", "")
-        # Try a few possible formats: '8:20PM', '8:20P', '1PM'
-        for fmt in ("%I:%M%p", "%I%p"):
-            try:
-                t = datetime.strptime(normalized, fmt)
-                # Dummy date, only time-of-day + TZ matters for offset
-                dt_et = t.replace(year=2000, month=1, day=1, tzinfo=SOURCE_TZ)
-                dt_ct = dt_et.astimezone(TARGET_TZ)
-                return dt_ct.strftime("%-I:%M%p").lower().replace("pm", "p").replace("am", "a")
-            except ValueError:
-                continue
-
-        # If we can't parse, just show whatever the API gave us
-        return raw_time
-
-    return "TBD"
-
-# -----------------------------------------------------------
-# PRINT OUTPUT
-# -----------------------------------------------------------
+# CMD OUTPUT
 
 def print_game_status(game: Dict[str, Any]) -> None:
     away, home = game["away"], game["home"]
@@ -228,12 +205,9 @@ def print_game_status(game: Dict[str, Any]) -> None:
         print(f"Venue: {venue}")
         print(f"Kickoff: {sched} | {ou} | {ml}")
 
-
-# -----------------------------------------------------------
 # MAIN ENGINE
-# -----------------------------------------------------------
 
-def find_next_game_date(start_date: datetime, max_days=7):
+def find_next_game_date(start_date: datetime, max_days: int = 7):
     for offset in range(1, max_days + 1):
         next_date = start_date + timedelta(days=offset)
         date_str = next_date.strftime("%Y%m%d")
@@ -243,7 +217,13 @@ def find_next_game_date(start_date: datetime, max_days=7):
     return None, None
 
 
-def process_scores() -> None:
+def process_scores(return_games: bool = False) -> Optional[List[Dict[str, Any]]]:
+    
+    # Core engine:
+    #   • When run as a script -> logs & renders panels.
+    #   • When called with return_games=True -> returns a list of game dicts
+    #     suitable for publishing over MQTT.
+    
     today = datetime.now(ZoneInfo("America/Chicago"))
     date_str = today.strftime("%Y%m%d")
     games = get_live_scores(date_str)
@@ -253,13 +233,15 @@ def process_scores() -> None:
         date_str, games = find_next_game_date(today) or (None, None)
         if not games:
             logger.info("No upcoming games at all.")
-            return
+            return [] if return_games else None
         logger.info(f"Next games on {date_str}")
 
     odds_data = odds_by_game(date_str)
     team_data_cache = get_team_data()
 
     logger.info(f"\nNFL Games for {date_str}:\n")
+
+    games_payload: List[Dict[str, Any]] = []
 
     for game_id, game_info in games.items():
         if not validate_game_data(game_info):
@@ -272,10 +254,10 @@ def process_scores() -> None:
             away = game_info["away"]
             home = game_info["home"]
 
-            # ---------------- SAFE SCORES ----------------
+            # SAFE SCORES 
             away_score, home_score = safe_score(game_id, game_info)
 
-            # ---------------- STATUS FIELDS ----------------
+            # STATUS FIELDS 
             raw_status = (
                 game_info.get("gameStatus")
                 or game_info.get("gameStatusText")
@@ -296,26 +278,27 @@ def process_scores() -> None:
 
             clock = game_info.get("gameClock") or game_info.get("clock") or ""
 
-
-            # ---------------- SAFE STATUS ----------------
+            # SAFE STATUS
             display_status = safe_live_status(game_id, raw_status, period, clock)
 
-            # ---------------- VENUE + TIME ----------------
+            # VENUE & TIME 
             venue_info = get_game_venue(game_id)
             venue = venue_info.get("venue", "N/A")
             scheduled_time = format_kickoff_ct(game_info, venue_info)
 
-            # ---------------- RECORDS ----------------
+            #  RECORDS 
             away_record = get_team_record(away, team_data_cache)
             home_record = get_team_record(home, team_data_cache)
 
-            # ---------------- ODDS ----------------
+            # ODDS 
             game_odds = odds_data.get(game_id, {"ML": "ML: N/A", "O/U": "O/U: N/A"})
             ou_string = game_odds["O/U"]
             ml_string = game_odds["ML"]
 
-            # ---------------- FINAL GAME DATA ----------------
+            # FINAL GAME DATA 
             game_data = {
+                "game_id": game_id,
+                "date": date_str,
                 "venue": venue,
                 "away": away,
                 "home": home,
@@ -329,11 +312,19 @@ def process_scores() -> None:
                 "home_record": home_record,
             }
 
+            games_payload.append(game_data)
+
+            # Local display / debugging
             render_game_to_image(game_data)
             print_game_status(game_data)
 
         except Exception as e:
             logger.error(f"Error processing game {game_id}: {e}", exc_info=True)
+
+    if return_games:
+        return games_payload
+
+    return None
 
 
 if __name__ == "__main__":
