@@ -54,6 +54,8 @@ def get(endpoint, params, retries=3, backoff=2):
         "X-RapidAPI-Host": "tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com"
     }
 
+    
+
     for attempt in range(retries):
         response = requests.get(url, headers=headers, params=params)
         if response.status_code == 429:
